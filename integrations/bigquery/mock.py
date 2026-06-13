@@ -1,0 +1,54 @@
+"""
+Mock BigQuery implementation.
+Reads agent + ecosystem data from fixtures/agents.json.
+Shapes its responses identically to live.py.
+"""
+
+import json
+from pathlib import Path
+from typing import List
+from integrations.bigquery.base import BigQueryClient
+from core.models import Agent, RagasScores, EcosystemStats
+
+FIXTURES_PATH = Path(__file__).parent.parent.parent / "fixtures" / "agents.json"
+
+
+def _load_fixtures():
+    with open(FIXTURES_PATH) as f:
+        return json.load(f)
+
+
+class MockBigQueryClient(BigQueryClient):
+
+    def get_erc8004_agents(self) -> List[Agent]:
+        data = _load_fixtures()
+        agents = []
+        for a in data["agents"]:
+            ragas = None
+            if a.get("ragas"):
+                ragas = RagasScores(**a["ragas"])
+            agents.append(
+                Agent(
+                    agent_id=a["agent_id"],
+                    name=a["name"],
+                    description=a["description"],
+                    capability=a["capability"],
+                    hedera_topic_id=a.get("hedera_topic_id"),
+                    erc8004_address=a.get("erc8004_address"),
+                    erc8004_reputation=a.get("erc8004_reputation"),
+                    supports_x402=a.get("supports_x402", False),
+                    ragas=ragas,
+                )
+            )
+        return agents
+
+    def get_ecosystem_stats(self) -> EcosystemStats:
+        data = _load_fixtures()
+        stats = data["ecosystem_stats"]
+        return EcosystemStats(
+            total_agents=stats["total_agents"],
+            agents_with_x402=stats["agents_with_x402"],
+            avg_reputation=stats["avg_reputation"],
+            registrations_last_30d=stats["registrations_last_30d"],
+            reputation_distribution=stats["reputation_distribution"],
+        )

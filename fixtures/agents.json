@@ -1,0 +1,103 @@
+{
+  "agents": [
+    {
+      "agent_id": "agent-graphrag-eval",
+      "name": "GraphRAG Evaluator",
+      "description": "Knowledge-graph-driven RAG agent specialized in benchmarking retrieval quality for enterprise QA systems.",
+      "capability": "rag-evaluation",
+      "hedera_topic_id": "0.0.6421189",
+      "erc8004_address": "0x7a3fE9c2B1d4A0F88c3e6B2d4f1A9c7E3D5b2F81",
+      "erc8004_reputation": 91.0,
+      "supports_x402": true,
+      "ragas": {
+        "faithfulness": 0.94,
+        "answer_relevancy": 0.89,
+        "context_precision": 0.92
+      }
+    },
+    {
+      "agent_id": "agent-fastretrieve",
+      "name": "FastRetrieve Agent",
+      "description": "Low-latency vector retrieval agent optimized for speed over depth.",
+      "capability": "rag-evaluation",
+      "hedera_topic_id": "0.0.6421203",
+      "erc8004_address": "0x9b1Cc4E7a2F6D3b8A0e5C1d9F4b7A3E2D8c6B015",
+      "erc8004_reputation": 64.0,
+      "supports_x402": true,
+      "ragas": {
+        "faithfulness": 0.71,
+        "answer_relevancy": 0.78,
+        "context_precision": 0.66
+      }
+    },
+    {
+      "agent_id": "agent-summarizer-pro",
+      "name": "Summarizer Pro",
+      "description": "Long-document summarization agent with citation tracking.",
+      "capability": "summarization",
+      "hedera_topic_id": "0.0.6421217",
+      "erc8004_address": "0x4D2eA8b1C5f3A7d9E0b6C2f8A1d4B7e3C9f5A206",
+      "erc8004_reputation": 78.0,
+      "supports_x402": true,
+      "ragas": {
+        "faithfulness": 0.85,
+        "answer_relevancy": 0.81,
+        "context_precision": 0.74
+      }
+    },
+    {
+      "agent_id": "agent-quickanswer",
+      "name": "QuickAnswer Bot",
+      "description": "General-purpose chatbot with no verifiable evaluation history.",
+      "capability": "rag-evaluation",
+      "hedera_topic_id": null,
+      "erc8004_address": "0x1Fa9D7c3B4e8A2f0D6c1B9e4A7d2F8c5E3b0A974",
+      "erc8004_reputation": 12.0,
+      "supports_x402": false,
+      "ragas": {
+        "faithfulness": 0.41,
+        "answer_relevancy": 0.55,
+        "context_precision": 0.38
+      }
+    },
+    {
+      "agent_id": "agent-newcomer",
+      "name": "Newcomer Agent",
+      "description": "Recently registered agent, no on-chain history yet.",
+      "capability": "rag-evaluation",
+      "hedera_topic_id": null,
+      "erc8004_address": "0x0000000000000000000000000000000000dEaD",
+      "erc8004_reputation": 0.0,
+      "supports_x402": false,
+      "ragas": null
+    },
+    {
+      "agent_id": "agent-contextmaster",
+      "name": "ContextMaster",
+      "description": "Context-window-optimized RAG agent for long-document QA.",
+      "capability": "rag-evaluation",
+      "hedera_topic_id": "0.0.6421244",
+      "erc8004_address": "0x6Ec3A1d8B5f2C9e4A0d7B3f6C8e1A5d2F9b4C730",
+      "erc8004_reputation": 83.0,
+      "supports_x402": true,
+      "ragas": {
+        "faithfulness": 0.88,
+        "answer_relevancy": 0.86,
+        "context_precision": 0.90
+      }
+    }
+  ],
+  "ecosystem_stats": {
+    "total_agents": 39482,
+    "agents_with_x402": 8127,
+    "avg_reputation": 47.3,
+    "registrations_last_30d": 5210,
+    "reputation_distribution": {
+      "0-20": 9871,
+      "20-40": 11023,
+      "40-60": 8765,
+      "60-80": 6210,
+      "80-100": 3613
+    }
+  }
+}

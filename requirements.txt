@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+streamlit
+pandas
+requests
+hiero-sdk-python
+python-dotenv
+protobuf>=4.21.0
