@@ -7,7 +7,8 @@ Frontend/API code should only depend on this interface.
 
 from abc import ABC, abstractmethod
 from typing import Optional
-from core.models import PaymentDecision
+from core.models import PaymentDecision, ScheduledReevaluation, AgentIdentity, AuditLogEntry
+from typing import List
 
 
 class HederaClient(ABC):
@@ -36,4 +37,59 @@ class HederaClient(ABC):
     @abstractmethod
     def log_to_hcs(self, message: dict) -> str:
         """Submit a message to an HCS topic for the audit trail. Returns message id."""
+        ...
+
+    @abstractmethod
+    def schedule_reevaluation(
+        self, agent_id: str, scheduled_by: str
+    ) -> ScheduledReevaluation:
+        """
+        Create a Hedera ScheduleCreateTransaction that wraps an HCS message
+        announcing a future re-evaluation of agent_id.  Returns a
+        ScheduledReevaluation with the on-chain schedule_id so the caller
+        can poll its status via the mirror node.
+        """
+        ...
+
+    @abstractmethod
+    def get_schedule_status(self, schedule_id: str) -> ScheduledReevaluation:
+        """
+        Query the current status of a previously created scheduled transaction
+        (executed / pending / expired) via ScheduleInfoQuery or mirror node REST.
+        """
+        ...
+
+    @abstractmethod
+    def register_agent_identity(
+        self,
+        agent_id: str,
+        name: str,
+        capabilities: list,
+    ) -> AgentIdentity:
+        """
+        Create an HCS topic whose memo encodes the HCS-14 agent identity JSON.
+        The returned topic_id IS the universal agent identifier.
+        Also submits a "registration" event to the new topic as the genesis message.
+        """
+        ...
+
+    @abstractmethod
+    def get_agent_audit_log(
+        self, topic_id: str, limit: int = 25
+    ) -> List[AuditLogEntry]:
+        """
+        Fetch the most recent HCS messages from an agent's identity topic.
+        Live: queries testnet.mirrornode.hedera.com/api/v1/topics/{topic_id}/messages.
+        Mock: reads from fixtures/audit_log_cache.json.
+        """
+        ...
+
+    @abstractmethod
+    def log_agent_event(
+        self, topic_id: str, event_type: str, payload: dict
+    ) -> str:
+        """
+        Submit a structured event to an agent's HCS topic.
+        Returns the sequence number as a string.
+        """
         ...

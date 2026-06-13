@@ -1,16 +1,21 @@
 """
 Mock BigQuery implementation.
 Reads agent + ecosystem data from fixtures/agents.json.
-Shapes its responses identically to live.py.
+Reads scoring data from fixtures/feedback_cache.json and
+fixtures/wallet_stats_cache.json.
+Shapes responses identically to live.py.
 """
 
 import json
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 from integrations.bigquery.base import BigQueryClient
 from core.models import Agent, RagasScores, EcosystemStats
+from core.scoring import FeedbackEvent, GiverStats
 
-FIXTURES_PATH = Path(__file__).parent.parent.parent / "fixtures" / "agents.json"
+FIXTURES_PATH   = Path(__file__).parent.parent.parent / "fixtures" / "agents.json"
+FEEDBACK_CACHE  = Path(__file__).parent.parent.parent / "fixtures" / "feedback_cache.json"
+WALLET_CACHE    = Path(__file__).parent.parent.parent / "fixtures" / "wallet_stats_cache.json"
 
 
 def _load_fixtures():
@@ -33,6 +38,7 @@ class MockBigQueryClient(BigQueryClient):
                     name=a["name"],
                     description=a["description"],
                     capability=a["capability"],
+                    domain=a.get("domain"),
                     hedera_topic_id=a.get("hedera_topic_id"),
                     erc8004_address=a.get("erc8004_address"),
                     erc8004_reputation=a.get("erc8004_reputation"),
@@ -52,3 +58,28 @@ class MockBigQueryClient(BigQueryClient):
             registrations_last_30d=stats["registrations_last_30d"],
             reputation_distribution=stats["reputation_distribution"],
         )
+
+    def get_domain_taxonomy(self) -> Dict[str, int]:
+        data = _load_fixtures()
+        return data.get("domain_taxonomy", {})
+
+    def get_feedback_for_scoring(self) -> List[FeedbackEvent]:
+        if not FEEDBACK_CACHE.exists():
+            return []
+        with open(FEEDBACK_CACHE) as f:
+            data = json.load(f)
+        return [FeedbackEvent(**e) for e in data.get("feedback_events", [])]
+
+    def get_giver_wallet_stats(
+        self, giver_addresses: List[str]
+    ) -> Dict[str, GiverStats]:
+        if not WALLET_CACHE.exists():
+            return {}
+        with open(WALLET_CACHE) as f:
+            data = json.load(f)
+        stats = data.get("wallet_stats", {})
+        return {
+            addr: GiverStats(**stats[addr])
+            for addr in giver_addresses
+            if addr in stats
+        }

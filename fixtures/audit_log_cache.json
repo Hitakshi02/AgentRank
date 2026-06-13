@@ -1,0 +1,172 @@
+{
+  "topics": {
+    "0.0.6421189": {
+      "agent_id": "agent-graphrag-eval",
+      "name": "GraphRAG Evaluator",
+      "capabilities": ["rag-evaluation"],
+      "messages": [
+        {
+          "sequence_number": 1,
+          "consensus_timestamp": "1749000001.000000000",
+          "event_type": "registration",
+          "payload": {
+            "standard": "HCS-14",
+            "type": "agent_identity",
+            "agent_id": "agent-graphrag-eval",
+            "name": "GraphRAG Evaluator",
+            "capabilities": ["rag-evaluation"],
+            "supports_x402": true,
+            "version": "1.0"
+          }
+        },
+        {
+          "sequence_number": 2,
+          "consensus_timestamp": "1749100234.500000000",
+          "event_type": "x402_access",
+          "payload": {
+            "resource_id": "rag-eval",
+            "requester_id": "requester-agent-v1",
+            "amount_tinybars": 100000,
+            "tx_id": "0.0.9219095@1749100234.123456789",
+            "verified": true
+          }
+        },
+        {
+          "sequence_number": 3,
+          "consensus_timestamp": "1749200456.000000000",
+          "event_type": "hire",
+          "payload": {
+            "requester_id": "requester-agent-v1",
+            "goal": "Evaluate my RAG pipeline",
+            "trust_score": 0.912,
+            "threshold": 0.5,
+            "payment_approved": true,
+            "amount_usd": 0.01
+          }
+        },
+        {
+          "sequence_number": 4,
+          "consensus_timestamp": "1749200460.000000000",
+          "event_type": "payment",
+          "payload": {
+            "tx_id": "0.0.847201@1749200460.987654321",
+            "amount_tinybars": 100000,
+            "from": "requester-agent-v1",
+            "to": "agent-graphrag-eval",
+            "memo": "AgentRanker payment: agent-graphrag-eval"
+          }
+        },
+        {
+          "sequence_number": 5,
+          "consensus_timestamp": "1749200465.000000000",
+          "event_type": "reevaluation_scheduled",
+          "payload": {
+            "schedule_id": "0.0.6565123",
+            "scheduled_by": "requester-agent-v1",
+            "reason": "post_hire_auto_schedule"
+          }
+        },
+        {
+          "sequence_number": 6,
+          "consensus_timestamp": "1749300700.000000000",
+          "event_type": "x402_access",
+          "payload": {
+            "resource_id": "rag-eval",
+            "requester_id": "autonomous-agent-beta",
+            "amount_tinybars": 100000,
+            "tx_id": "0.0.9219095@1749300700.111222333",
+            "verified": true
+          }
+        }
+      ]
+    },
+    "0.0.6421203": {
+      "agent_id": "agent-fastretrieve",
+      "name": "FastRetrieve",
+      "capabilities": ["rag-evaluation", "summarization"],
+      "messages": [
+        {
+          "sequence_number": 1,
+          "consensus_timestamp": "1749000050.000000000",
+          "event_type": "registration",
+          "payload": {
+            "standard": "HCS-14",
+            "type": "agent_identity",
+            "agent_id": "agent-fastretrieve",
+            "name": "FastRetrieve",
+            "capabilities": ["rag-evaluation", "summarization"],
+            "supports_x402": true,
+            "version": "1.0"
+          }
+        },
+        {
+          "sequence_number": 2,
+          "consensus_timestamp": "1749150300.000000000",
+          "event_type": "hire",
+          "payload": {
+            "requester_id": "demo-user",
+            "goal": "Summarize documents",
+            "trust_score": 0.74,
+            "threshold": 0.5,
+            "payment_approved": true,
+            "amount_usd": 0.01
+          }
+        }
+      ]
+    },
+    "0.0.6421217": {
+      "agent_id": "agent-summarizer-pro",
+      "name": "Summarizer Pro",
+      "capabilities": ["summarization"],
+      "messages": [
+        {
+          "sequence_number": 1,
+          "consensus_timestamp": "1749000100.000000000",
+          "event_type": "registration",
+          "payload": {
+            "standard": "HCS-14",
+            "type": "agent_identity",
+            "agent_id": "agent-summarizer-pro",
+            "name": "Summarizer Pro",
+            "capabilities": ["summarization"],
+            "supports_x402": false,
+            "version": "1.0"
+          }
+        }
+      ]
+    },
+    "0.0.6421244": {
+      "agent_id": "agent-contextmaster",
+      "name": "ContextMaster",
+      "capabilities": ["rag-evaluation"],
+      "messages": [
+        {
+          "sequence_number": 1,
+          "consensus_timestamp": "1749000200.000000000",
+          "event_type": "registration",
+          "payload": {
+            "standard": "HCS-14",
+            "type": "agent_identity",
+            "agent_id": "agent-contextmaster",
+            "name": "ContextMaster",
+            "capabilities": ["rag-evaluation"],
+            "supports_x402": true,
+            "version": "1.0"
+          }
+        },
+        {
+          "sequence_number": 2,
+          "consensus_timestamp": "1749250800.000000000",
+          "event_type": "x402_access",
+          "payload": {
+            "resource_id": "agent-info",
+            "requester_id": "requester-agent-v1",
+            "amount_tinybars": 100000,
+            "tx_id": "0.0.9219095@1749250800.444555666",
+            "verified": true
+          }
+        }
+      ]
+    }
+  }
+}

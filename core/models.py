@@ -33,6 +33,7 @@ class Agent:
     erc8004_reputation: Optional[float] = None  # 0-100, from BigQuery
     supports_x402: bool = False
     ragas: Optional[RagasScores] = None
+    domain: Optional[str] = None             # on-chain domain hint (from AgentRegistered type URL)
 
     @property
     def trust_score(self) -> float:
@@ -59,9 +60,11 @@ class PaymentDecision:
     threshold: float
     approved: bool
     amount_usd: float
-    tx_id: Optional[str] = None          # Hedera tx id if approved
-    hcs_message_id: Optional[str] = None  # audit log message id
+    tx_id: Optional[str] = None           # Hedera tx id OR Arc 0x tx hash
+    hcs_message_id: Optional[str] = None  # audit log message id (Hedera only)
     reason: str = ""
+    rail: str = "hedera"                  # "hedera" | "arc"
+    usdc_amount: Optional[float] = None   # set when rail="arc"
 
 
 @dataclass
@@ -72,3 +75,79 @@ class EcosystemStats:
     registrations_last_30d: int
     reputation_distribution: dict = field(default_factory=dict)
     # e.g. {"0-20": 120, "20-40": 340, ...}
+
+
+@dataclass
+class X402AccessResult:
+    """Full trace of one x402 pay-per-request handshake."""
+    resource_id: str
+    requirements: Optional[dict] = None    # the 402 payment requirements
+    payment_proof: Optional[dict] = None   # what was paid
+    verified: bool = False
+    result: Optional[dict] = None          # the service response (if verified)
+    source: str = "mock"                   # "mock" or "live"
+    error: Optional[str] = None
+    # Human-readable trace of each protocol step
+    steps: list = field(default_factory=list)  # List[dict] — step_type/title/status/description
+
+
+@dataclass
+class HireStep:
+    step_type: str    # discover | filter | select | decide | pay | serve
+    title: str
+    status: str       # ok | blocked | error
+    description: str
+    data: dict = field(default_factory=dict)
+    elapsed_ms: int = 0
+
+
+@dataclass
+class AuditLogEntry:
+    """A single HCS message in an agent's audit trail."""
+    sequence_number: int
+    consensus_timestamp: str        # Hedera consensus timestamp (Unix seconds.nanos)
+    event_type: str                 # registration | hire | payment | reevaluation | x402_access
+    payload: dict = field(default_factory=dict)
+    topic_id: str = ""
+
+
+@dataclass
+class AgentIdentity:
+    """HCS-14 agent identity record backed by an HCS topic."""
+    agent_id: str
+    name: str
+    topic_id: str                   # the HCS topic IS the universal agent ID
+    capabilities: list = field(default_factory=list)
+    registered_at: Optional[str] = None
+    memo: str = ""                  # JSON-encoded HCS-14 metadata stored as topic memo
+    audit_log: list = field(default_factory=list)   # List[AuditLogEntry]
+    error: Optional[str] = None
+
+
+@dataclass
+class ScheduledReevaluation:
+    """Result of creating a Hedera Scheduled Transaction for agent re-evaluation."""
+    schedule_id: str              # e.g. "0.0.12345"
+    agent_id: str
+    scheduled_by: str
+    hcs_topic_id: str
+    memo: str
+    status: str = "pending"       # pending | executed | expired | deleted
+    executed_at: Optional[str] = None
+    expiration_time: Optional[str] = None
+    hcs_sequence_number: Optional[int] = None
+    error: Optional[str] = None
+
+
+@dataclass
+class AutonomousHireResult:
+    goal: str
+    capability: str
+    steps: list = field(default_factory=list)          # List[HireStep]
+    selected_agent_id: Optional[str] = None
+    selected_agent_name: Optional[str] = None
+    payment_decision: Optional[dict] = None            # PaymentDecision serialised
+    service_output: Optional[dict] = None
+    total_elapsed_ms: int = 0
+    success: bool = False
+    error: Optional[str] = None

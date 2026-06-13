@@ -8,9 +8,13 @@ doesn't need to know which one is active.
 import json
 import time
 import random
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
+from typing import List
 from integrations.hedera.base import HederaClient
-from core.models import PaymentDecision
+from core.models import PaymentDecision, ScheduledReevaluation, AgentIdentity, AuditLogEntry
+
+AUDIT_CACHE = Path(__file__).parent.parent.parent / "fixtures" / "audit_log_cache.json"
 
 FIXTURES_PATH = Path(__file__).parent.parent.parent / "fixtures" / "agents.json"
 
@@ -72,3 +76,99 @@ class MockHederaClient(HederaClient):
 
     def log_to_hcs(self, message: dict) -> str:
         return _fake_hcs_message_id()
+
+    def schedule_reevaluation(
+        self, agent_id: str, scheduled_by: str
+    ) -> ScheduledReevaluation:
+        schedule_num = random.randint(6500000, 6599999)
+        schedule_id  = f"0.0.{schedule_num}"
+        topic_num    = random.randint(6400000, 6499999)
+        topic_id     = f"0.0.{topic_num}"
+        now = datetime.now(timezone.utc)
+        expiry = (now + timedelta(hours=24)).isoformat()
+        memo = f"AgentRanker re-eval: {agent_id}"
+        return ScheduledReevaluation(
+            schedule_id=schedule_id,
+            agent_id=agent_id,
+            scheduled_by=scheduled_by,
+            hcs_topic_id=topic_id,
+            memo=memo,
+            status="executed",          # mock: executes immediately (operator is sole signer)
+            executed_at=now.isoformat(),
+            expiration_time=expiry,
+            hcs_sequence_number=random.randint(1, 9999),
+        )
+
+    def register_agent_identity(
+        self, agent_id: str, name: str, capabilities: list
+    ) -> AgentIdentity:
+        import json as _json
+        topic_num = random.randint(6600000, 6699999)
+        topic_id  = f"0.0.{topic_num}"
+        now = datetime.now(timezone.utc).isoformat()
+        memo = _json.dumps({
+            "standard": "HCS-14",
+            "type": "agent_identity",
+            "agent_id": agent_id,
+            "name": name,
+            "capabilities": capabilities,
+            "version": "1.0",
+        })
+        genesis = AuditLogEntry(
+            sequence_number=1,
+            consensus_timestamp=str(int(time.time())) + ".000000000",
+            event_type="registration",
+            payload={
+                "standard": "HCS-14",
+                "agent_id": agent_id,
+                "name": name,
+                "capabilities": capabilities,
+            },
+            topic_id=topic_id,
+        )
+        return AgentIdentity(
+            agent_id=agent_id,
+            name=name,
+            topic_id=topic_id,
+            capabilities=capabilities,
+            registered_at=now,
+            memo=memo,
+            audit_log=[genesis],
+        )
+
+    def get_agent_audit_log(
+        self, topic_id: str, limit: int = 25
+    ) -> List[AuditLogEntry]:
+        if not AUDIT_CACHE.exists():
+            return []
+        data = json.load(open(AUDIT_CACHE))
+        topic_data = data.get("topics", {}).get(topic_id)
+        if not topic_data:
+            return []
+        entries = []
+        for m in topic_data.get("messages", [])[:limit]:
+            entries.append(AuditLogEntry(
+                sequence_number=m["sequence_number"],
+                consensus_timestamp=m["consensus_timestamp"],
+                event_type=m["event_type"],
+                payload=m.get("payload", {}),
+                topic_id=topic_id,
+            ))
+        return entries
+
+    def log_agent_event(
+        self, topic_id: str, event_type: str, payload: dict
+    ) -> str:
+        return str(random.randint(1, 9999))
+
+    def get_schedule_status(self, schedule_id: str) -> ScheduledReevaluation:
+        now = datetime.now(timezone.utc)
+        return ScheduledReevaluation(
+            schedule_id=schedule_id,
+            agent_id="unknown",
+            scheduled_by="unknown",
+            hcs_topic_id="0.0.0",
+            memo=f"AgentRanker re-eval (mock lookup: {schedule_id})",
+            status="executed",
+            executed_at=now.isoformat(),
+        )
