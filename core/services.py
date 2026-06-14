@@ -63,8 +63,7 @@ def compute_service_result(
                     f"RAG pipeline scored {scores.average:.3f} average across 3 queries. "
                     f"Context precision ({scores.context_precision:.2f}) "
                     f"{'is' if scores.context_precision < scores.faithfulness else 'and faithfulness are'}"
-                    f" the {'primary bottleneck — consider increasing the retrieval top-k.' if scores.context_precision < 0.85 else 'both strong.'}"
-                ),
+                    f" {'the primary bottleneck — consider increasing the retrieval top-k.' if scores.context_precision < 0.85 else 'a strong point.'}"                ),
                 "source": source,
             }
         # No RAGAS data for this agent — return a clearly-labelled placeholder

@@ -45,16 +45,21 @@ function SkeletonRow() {
   );
 }
 
+function shortId(agent_id: string): string {
+  // Full 64-char hex like 0x000...3841 → "Agent 0x…3841"
+  if (/^0x[0-9a-f]{10,}$/i.test(agent_id)) {
+    return `Agent 0x…${agent_id.slice(-4)}`;
+  }
+  return agent_id
+    .replace(/^agent-/, "")
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export default function TrustShield({ data, isLoading, agents = [] }: TrustShieldProps) {
   const getName = (agent_id: string) => {
     const found = agents.find((a) => a.agent_id === agent_id);
-    return (
-      found?.name ??
-      agent_id
-        .replace(/^agent-/, "")
-        .replace(/-/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase())
-    );
+    return found?.name ?? shortId(agent_id);
   };
   return (
     <div
@@ -259,10 +264,15 @@ export default function TrustShield({ data, isLoading, agents = [] }: TrustShiel
       )}
 
       <div
-        className="px-6 py-3 text-xs"
+        className="px-6 py-3 text-xs flex items-center justify-between"
         style={{ borderTop: "1px solid rgba(255,255,255,0.05)", color: "#64748b" }}
       >
-        Sybil resistance via ERC-8004 wallet stake analysis · AgentRanker v0.1
+        <span>Sybil resistance via ERC-8004 wallet stake analysis</span>
+        {data && (
+          <span>
+            Showing top 12 + 3 dramatic drops · {data.total_agents.toLocaleString()} agents evaluated
+          </span>
+        )}
       </div>
     </div>
   );

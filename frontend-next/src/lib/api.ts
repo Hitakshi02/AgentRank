@@ -116,7 +116,7 @@ export async function fetchRankingComparison(): Promise<{
   if (!cmp) return { comparison: null, source: raw.source || {} };
 
   // API returns `deltas[]` with `sybil_score` and `flags[]`; map to our frontend shape
-  const agents: RankingAgent[] = (cmp.deltas || []).map((d: {
+  const all: RankingAgent[] = (cmp.deltas || []).map((d: {
     agent_id: string;
     naive_rank: number;
     sybil_rank: number;
@@ -135,13 +135,24 @@ export async function fetchRankingComparison(): Promise<{
     flagged_as_sybil: (d.flags || []).length > 0,
   }));
 
-  agents.sort((a, b) => a.sybil_rank - b.sybil_rank);
+  all.sort((a, b) => a.sybil_rank - b.sybil_rank);
+
+  const totalSybil = all.filter((a) => a.flagged_as_sybil).length;
+
+  // Demo slice: top 12 by sybil rank + top 3 most dramatic sybil drops
+  const top12 = all.slice(0, 12);
+  const top12Ids = new Set(top12.map((a) => a.agent_id));
+  const dramaticDrops = all
+    .filter((a) => !top12Ids.has(a.agent_id) && a.flagged_as_sybil)
+    .sort((a, b) => b.rank_delta - a.rank_delta)
+    .slice(0, 3);
+  const agents = [...top12, ...dramaticDrops];
 
   return {
     comparison: {
       agents,
-      sybil_agents_detected: agents.filter((a) => a.flagged_as_sybil).length,
-      total_agents: agents.length,
+      sybil_agents_detected: totalSybil,
+      total_agents: all.length,
     },
     source: raw.source || {},
   };

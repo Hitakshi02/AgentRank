@@ -157,8 +157,12 @@ export default function ChatbotHire({
     [addMsg]
   );
 
-  // Greeting on mount
+  const greetedRef = useRef(false);
+
+  // Greeting on mount — ref guard prevents double-fire in React 18 StrictMode
   useEffect(() => {
+    if (greetedRef.current) return;
+    greetedRef.current = true;
     setTimeout(() => {
       setIsTyping(true);
       setTimeout(() => {

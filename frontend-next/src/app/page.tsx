@@ -89,7 +89,7 @@ export default function Home() {
     <main style={{ minHeight: "100vh", paddingTop: "64px" }}>
       <Nav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
 
         {/* ─── HERO ───────────────────────────────────────────────────── */}
         {activeTab === "hero" && (
