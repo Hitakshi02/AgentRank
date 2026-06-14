@@ -93,3 +93,46 @@ class HederaClient(ABC):
         Returns the sequence number as a string.
         """
         ...
+
+    def batch_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+        agent_topic_id: str = None,
+    ) -> PaymentDecision:
+        """
+        HIP-551 Batch Transaction: atomically bundles HBAR transfer + HCS audit +
+        agent topic log in one atomic tx. ACID guarantees.
+        """
+        ...
+
+    def schedule_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+        execute_at_seconds: int = None,
+    ) -> PaymentDecision:
+        """
+        Scheduled Transaction: async multi-sig coordination. Queues the hire
+        for future execution.
+        """
+        ...
+
+    def atomic_swap_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+    ) -> PaymentDecision:
+        """
+        Atomic Swap: simultaneous HBAR-for-service exchange. Both sides execute atomically.
+        """
+        ...

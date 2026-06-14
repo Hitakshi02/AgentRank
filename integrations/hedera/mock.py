@@ -172,3 +172,122 @@ class MockHederaClient(HederaClient):
             status="executed",
             executed_at=now.isoformat(),
         )
+
+    def batch_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+        agent_topic_id: str = None,
+    ) -> PaymentDecision:
+        """
+        HIP-551 Batch Transaction: atomically bundles HBAR transfer + HCS audit +
+        agent topic log in one atomic tx. ACID guarantees.
+        """
+        approved = trust_score >= threshold
+        batch_num = random.randint(100000, 999999)
+        batch_id = f"0.0.{batch_num}/batch"
+
+        # Log to HCS (simulated)
+        self.log_to_hcs({
+            "event_type": "batch_hire",
+            "requester_id": requester_id,
+            "target_agent_id": target_agent_id,
+            "trust_score": trust_score,
+            "approved": approved,
+            "batch_id": batch_id,
+        })
+
+        return PaymentDecision(
+            requester_id=requester_id,
+            target_agent_id=target_agent_id,
+            trust_score=trust_score,
+            threshold=threshold,
+            approved=approved,
+            amount_usd=amount_usd,
+            tx_id=_fake_tx_id() if approved else None,
+            hcs_message_id=_fake_hcs_message_id(),
+            reason=(
+                f"HIP-551 batch: trust_score {trust_score:.3f} >= threshold {threshold:.3f} — "
+                "HBAR transfer + HCS audit + agent topic log bundled atomically."
+                if approved
+                else f"HIP-551 batch BLOCKED: trust_score {trust_score:.3f} < threshold {threshold:.3f}"
+            ),
+            transaction_type="batch",
+            batch_id=batch_id,
+        )
+
+    def schedule_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+        execute_at_seconds: int = None,
+    ) -> PaymentDecision:
+        """
+        Scheduled Transaction: async multi-sig coordination. Queues the hire
+        for future execution (~30 seconds in the future in mock mode).
+        """
+        approved = trust_score >= threshold
+        schedule_num = random.randint(6500000, 6599999)
+        fake_schedule_id = f"0.0.{schedule_num}"
+
+        now = datetime.now(timezone.utc)
+        delay = execute_at_seconds if execute_at_seconds is not None else 30
+        scheduled_at = (now + timedelta(seconds=delay)).isoformat()
+
+        return PaymentDecision(
+            requester_id=requester_id,
+            target_agent_id=target_agent_id,
+            trust_score=trust_score,
+            threshold=threshold,
+            approved=approved,
+            amount_usd=amount_usd,
+            tx_id=_fake_tx_id() if approved else None,
+            hcs_message_id=_fake_hcs_message_id(),
+            reason=(
+                f"Scheduled hire queued: trust_score {trust_score:.3f} >= threshold {threshold:.3f}. "
+                f"Will execute at {scheduled_at} via multi-sig coordination."
+                if approved
+                else f"Scheduled hire BLOCKED: trust_score {trust_score:.3f} < threshold {threshold:.3f}"
+            ),
+            transaction_type="scheduled",
+            batch_id=fake_schedule_id,
+            scheduled_at=scheduled_at,
+        )
+
+    def atomic_swap_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+    ) -> PaymentDecision:
+        """
+        Atomic Swap: simultaneous HBAR-for-service exchange.
+        Both payment and service delivery happen in same atomic transaction.
+        """
+        approved = trust_score >= threshold
+
+        return PaymentDecision(
+            requester_id=requester_id,
+            target_agent_id=target_agent_id,
+            trust_score=trust_score,
+            threshold=threshold,
+            approved=approved,
+            amount_usd=amount_usd,
+            tx_id=_fake_tx_id() if approved else None,
+            hcs_message_id=_fake_hcs_message_id(),
+            reason=(
+                f"Atomic swap executed: trust_score {trust_score:.3f} >= threshold {threshold:.3f}. "
+                "HBAR payment and service token exchanged simultaneously — both sides atomic."
+                if approved
+                else f"Atomic swap BLOCKED: trust_score {trust_score:.3f} < threshold {threshold:.3f}"
+            ),
+            transaction_type="atomic_swap",
+        )

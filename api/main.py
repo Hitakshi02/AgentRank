@@ -22,6 +22,7 @@ import config
 from core.leaderboard import build_leaderboard, find_agent
 from core.requester_agent import RequesterAgent
 from core.scoring import score_all_agents
+from core.services import compute_service_result
 
 app = FastAPI(title="AgentRanker API")
 
@@ -85,7 +86,6 @@ class PayRequest(BaseModel):
     requester_id: str = "demo-user"
     target_agent_id: str
     amount_usd: Optional[float] = None
-    rail: str = "hedera"   # "hedera" | "arc"
 
 
 @app.post("/api/pay")
@@ -100,54 +100,20 @@ def pay_for_query(req: PayRequest):
     if agent is None:
         return {"error": f"agent {req.target_agent_id} not found"}
 
-    amount = req.amount_usd or config.QUERY_FEE_USD
-
-    if req.rail == "arc":
-        arc      = config.get_arc_client()
-        decision = arc.settle_usdc_payment(
-            requester_id=req.requester_id,
-            target_agent_id=agent.agent_id,
-            trust_score=agent.trust_score,
-            threshold=config.TRUST_THRESHOLD,
-            amount_usdc=amount,
-        )
-        # One brain, two rails: settle on Arc, but audit EVERY decision on
-        # Hedera HCS regardless of settlement rail.
-        hedera = config.get_hedera_client()
-        decision.hcs_message_id = hedera.log_to_hcs({
-            "rail":           "arc",
-            "requester_id":   req.requester_id,
-            "target_agent_id": agent.agent_id,
-            "trust_score":    agent.trust_score,
-            "threshold":      config.TRUST_THRESHOLD,
-            "approved":       decision.approved,
-            "amount_usdc":    amount,
-            "arc_tx_id":      decision.tx_id,
-            "reason":         decision.reason,
-        })
-        source = {
-            "arc":    "live" if config.USE_LIVE_ARC    else "mock",
-            "hedera": "live" if config.USE_LIVE_HEDERA else "mock",
-        }
-    else:
-        hedera   = config.get_hedera_client()
-        decision = hedera.submit_payment(
-            requester_id=req.requester_id,
-            target_agent_id=agent.agent_id,
-            trust_score=agent.trust_score,
-            threshold=config.TRUST_THRESHOLD,
-            amount_usd=amount,
-        )
-        source = {
-            "hedera": "live" if config.USE_LIVE_HEDERA else "mock",
-            "arc":    "mock",
-        }
+    hedera   = config.get_hedera_client()
+    decision = hedera.submit_payment(
+        requester_id=req.requester_id,
+        target_agent_id=agent.agent_id,
+        trust_score=agent.trust_score,
+        threshold=config.TRUST_THRESHOLD,
+        amount_usd=req.amount_usd or config.QUERY_FEE_USD,
+    )
 
     return {
-        "agent_name":        agent.name,
+        "agent_name":         agent.name,
         "agent_hedera_topic": agent.hedera_topic_id,
-        "decision":          asdict(decision),
-        "source":            source,
+        "decision":           asdict(decision),
+        "source":             {"hedera": "live" if config.USE_LIVE_HEDERA else "mock"},
     }
 
 
@@ -168,7 +134,7 @@ class AutonomousHireRequest(BaseModel):
     narrate_with_llm: bool = False
     requester_id: str = "requester-agent-v1"
     amount_usd: Optional[float] = None
-    rail: str = "hedera"   # "hedera" | "arc"
+    transaction_type: str = "batch"           # "standard" | "batch" | "scheduled" | "atomic_swap"
 
 
 @app.post("/api/autonomous-hire")
@@ -180,15 +146,15 @@ def autonomous_hire(req: AutonomousHireRequest):
     The loop:
       1. DISCOVER  — load leaderboard (BigQuery + RAGAS)
       2. FILTER    — capability match + trust threshold
-      3. SELECT    — highest-trust eligible agent
+      3. SELECT    — highest-trust serviceable agent (is_serviceable=True preferred)
       4. DECIDE    — rule-based (or optional LLM-narrated) reasoning
-      5. PAY       — trust-gated payment via specified rail
-      6. SERVE     — simulated service response from the hired agent
+      5. PAY       — trust-gated HBAR payment on Hedera; decision logged to HCS
+      6. SERVE     — real x402 pay-per-request call; RAGAS live or labelled mock
     """
-    bq      = config.get_bigquery_client()
-    ragas   = config.get_ragas_client()
-    hedera  = config.get_hedera_client()
-    arc     = config.get_arc_client()
+    bq     = config.get_bigquery_client()
+    ragas  = config.get_ragas_client()
+    hedera = config.get_hedera_client()
+    x402   = config.get_x402_client()
 
     agent = RequesterAgent(
         goal=req.goal,
@@ -197,24 +163,17 @@ def autonomous_hire(req: AutonomousHireRequest):
         narrate_with_llm=req.narrate_with_llm,
         requester_id=req.requester_id,
         amount_usd=req.amount_usd or config.QUERY_FEE_USD,
-        rail=req.rail,
+        transaction_type=req.transaction_type,
     )
-    result = agent.hire(bq, ragas, hedera, arc)
-
-    source = {
-        "bigquery": "live" if config.USE_LIVE_BIGQUERY else "mock",
-        "ragas":    "live" if config.USE_LIVE_RAGAS    else "mock",
-    }
-    if req.rail == "arc":
-        source["arc"] = "live" if config.USE_LIVE_ARC else "mock"
-        source["hedera"] = "mock"
-    else:
-        source["hedera"] = "live" if config.USE_LIVE_HEDERA else "mock"
-        source["arc"] = "mock"
+    result = agent.hire(bq, ragas, hedera, x402)
 
     return {
         **asdict(result),
-        "source": source,
+        "source": {
+            "bigquery": "live" if config.USE_LIVE_BIGQUERY else "mock",
+            "ragas":    "live" if config.USE_LIVE_RAGAS    else "mock",
+            "hedera":   "live" if config.USE_LIVE_HEDERA   else "mock",
+        },
     }
 
 
@@ -222,30 +181,30 @@ def autonomous_hire(req: AutonomousHireRequest):
 # x402 pay-per-request endpoints (Feature 2)
 # ---------------------------------------------------------------------------
 
-# Protected services available for x402 access
-_X402_SERVICES: dict = {
-    "rag-eval": {
-        "name":  "RAG Evaluation Service",
-        "task":  "rag_evaluation",
-        "queries_run": 3,
-        "ragas_scores": {
-            "faithfulness":       0.87,
-            "answer_relevancy":   0.83,
-            "context_precision":  0.79,
-        },
-        "average": 0.830,
-        "summary": (
-            "RAG pipeline scored 0.830 average across 3 queries. "
-            "Context precision (0.79) is the primary bottleneck — "
-            "consider increasing the retrieval top-k."
-        ),
-    },
+# Map x402 resource_id -> (capability, default_agent_id).
+# The default agent is the curated serviceable agent used for the standalone
+# /api/x402/service demo.  The hire loop uses the selected agent's own ID.
+_X402_RESOURCE_MAP: dict = {
+    "rag-eval":       ("rag-evaluation",  "agent-graphrag-eval"),
+    "summarize":      ("summarization",   "agent-summarizer-pro"),
+    "code-gen":       ("code-generation", "agent-codegen-sentinel"),
+    "sec-audit":      ("security-audit",  "agent-sol-auditor"),
+    "defi-data":      ("defi-analytics",  "agent-defi-oracle"),
+    "compliance":     ("compliance",      "agent-compliance-guard"),
+    "content":        ("content-writing", "agent-content-craft"),
+    "smart-contract": ("smart-contract",  "agent-smartcont-builder"),
+    "data-analysis":  ("data-analysis",   "agent-data-wizard"),
+    "translate":      ("translation",     "agent-translate-ai"),
+}
+
+# Non-evaluation resources (static, no RAGAS)
+_X402_STATIC: dict = {
     "agent-info": {
-        "name":    "Agent Capability Info",
-        "task":    "capability_query",
-        "capabilities": ["rag-evaluation", "summarization"],
-        "supported_protocols": ["x402", "a2a"],
-        "summary": "Agent supports RAG evaluation and summarization via x402 pay-per-request.",
+        "task":                 "capability_query",
+        "capabilities":         ["rag-evaluation", "summarization"],
+        "supported_protocols":  ["x402", "a2a"],
+        "summary":              "Agent supports RAG evaluation and summarization via x402 pay-per-request.",
+        "source":               "static",
     },
 }
 
@@ -387,16 +346,28 @@ def x402_service(req: X402ServiceRequest):
         }
 
     # ── 5. ACCESS ─────────────────────────────────────────────────────
-    service_result = _X402_SERVICES.get(
-        req.resource_id,
-        {"summary": f"Resource '{req.resource_id}' delivered."},
-    )
+    # Resolve service result through the shared compute_service_result()
+    # path — same code that the SERVE step in the hire loop uses.
+    if req.resource_id in _X402_STATIC:
+        service_result = _X402_STATIC[req.resource_id]
+    elif req.resource_id in _X402_RESOURCE_MAP:
+        capability, default_agent_id = _X402_RESOURCE_MAP[req.resource_id]
+        ragas = config.get_ragas_client()
+        service_result = compute_service_result(capability, default_agent_id, ragas)
+    else:
+        service_result = {
+            "task":    req.resource_id,
+            "summary": f"Resource '{req.resource_id}' delivered.",
+            "source":  "mock",
+        }
+
     steps.append({
         "step_type":   "access",
         "title":       "Server: 200 OK — resource delivered",
         "status":      "ok",
         "description": (
             f"Payment verified. Access granted to '{req.resource_id}'. "
+            f"Source: {service_result.get('source', 'unknown')}. "
             f"{service_result.get('summary', '')}"
         ),
         "data": service_result,

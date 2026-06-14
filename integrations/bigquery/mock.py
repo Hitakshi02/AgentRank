@@ -43,6 +43,7 @@ class MockBigQueryClient(BigQueryClient):
                     erc8004_address=a.get("erc8004_address"),
                     erc8004_reputation=a.get("erc8004_reputation"),
                     supports_x402=a.get("supports_x402", False),
+                    is_serviceable=a.get("is_serviceable", False),
                     ragas=ragas,
                 )
             )

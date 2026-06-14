@@ -34,6 +34,9 @@ class Agent:
     supports_x402: bool = False
     ragas: Optional[RagasScores] = None
     domain: Optional[str] = None             # on-chain domain hint (from AgentRegistered type URL)
+    # True = curated agent with a live service endpoint we can call.
+    # False = wild on-chain agent (reputation data only, no callable endpoint).
+    is_serviceable: bool = False
 
     @property
     def trust_score(self) -> float:
@@ -60,11 +63,12 @@ class PaymentDecision:
     threshold: float
     approved: bool
     amount_usd: float
-    tx_id: Optional[str] = None           # Hedera tx id OR Arc 0x tx hash
-    hcs_message_id: Optional[str] = None  # audit log message id (Hedera only)
+    tx_id: Optional[str] = None           # Hedera testnet tx id
+    hcs_message_id: Optional[str] = None  # HCS audit log message id
     reason: str = ""
-    rail: str = "hedera"                  # "hedera" | "arc"
-    usdc_amount: Optional[float] = None   # set when rail="arc"
+    transaction_type: str = "standard"    # "standard" | "batch" | "scheduled" | "atomic_swap"
+    batch_id: Optional[str] = None        # HIP-551 batch transaction ID
+    scheduled_at: Optional[str] = None   # ISO timestamp for scheduled execution
 
 
 @dataclass

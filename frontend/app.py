@@ -60,7 +60,6 @@ h1, h2, h3 { letter-spacing: -0.3px; }
     font-weight: 600; border: 1px solid;
 }
 .badge-hedera  { color: #3ecfcf; border-color: #3ecfcf33; background: #0d2929; }
-.badge-circle  { color: #e8e820; border-color: #e8e82033; background: #29290d; }
 .badge-eth     { color: #9b59b6; border-color: #9b59b633; background: #1a0d2b; }
 .badge-bq      { color: #4285f4; border-color: #4285f433; background: #0d1629; }
 
@@ -139,7 +138,8 @@ hr.soft { border: none; border-top: 1px solid #1e1e2e; margin: 2rem 0; }
 def api(method: str, path: str, **kwargs):
     try:
         fn = requests.get if method == "GET" else requests.post
-        r  = fn(f"{API_BASE}{path}", timeout=15, **kwargs)
+        timeout = kwargs.pop("timeout", 15)
+        r  = fn(f"{API_BASE}{path}", timeout=timeout, **kwargs)
         r.raise_for_status()
         return r.json(), None
     except Exception as e:
@@ -157,7 +157,7 @@ def fmt_ts(ts: str) -> str:
 # =============================================================================
 st.markdown("""
 <div class="hero">
-  <div class="hero-eyebrow">ERC-8004 · Hedera · Arc · BigQuery</div>
+  <div class="hero-eyebrow">ERC-8004 · Hedera · BigQuery</div>
   <div class="hero-title">
     The <span>trust layer</span><br>for the AI agent economy.
   </div>
@@ -171,7 +171,6 @@ st.markdown("""
   <div class="hero-badges">
     <span class="badge-pill badge-eth">⬡ ERC-8004 · 34,422 agents</span>
     <span class="badge-pill badge-hedera">◈ Hedera HCS · immutable audit</span>
-    <span class="badge-pill badge-circle">● Arc · USDC nanopayments</span>
     <span class="badge-pill badge-bq">▦ BigQuery · Ethereum mainnet</span>
   </div>
 </div>
@@ -223,7 +222,7 @@ st.markdown("""
     <div class="step-num">03</div>
     <div class="step-icon">🤝</div>
     <div class="step-title">Agent hires agent</div>
-    <div class="step-desc">A requester agent queries our API, gets the highest-trust match, and autonomously submits payment — HBAR on Hedera or USDC on Arc. No human.</div>
+    <div class="step-desc">A requester agent queries our API, gets the highest-trust match, and autonomously submits payment in HBAR on Hedera. No human.</div>
   </div>
   <div class="step-box">
     <div class="step-num">04</div>
@@ -253,11 +252,6 @@ st.markdown("""
     <div class="unlock-year">2025 — x402 Protocol</div>
     <div class="unlock-title">HTTP 402 pay-per-request</div>
     <div class="unlock-desc">A standard for machine-to-machine API payments. An agent sends a request, gets a 402 challenge, pays on-chain, and receives the response — no human, no API key.</div>
-  </div>
-  <div class="unlock-card">
-    <div class="unlock-year">2025 — Arc by Circle</div>
-    <div class="unlock-title">USDC as native gas</div>
-    <div class="unlock-desc">Circle's new L1 uses USDC as the native gas token. Agents pay each other in stablecoins with near-zero fees — no ETH required, compliant by default.</div>
   </div>
   <div class="unlock-card">
     <div class="unlock-year">2025 — HCS-14</div>
@@ -312,7 +306,7 @@ with tab1:
 
         st.dataframe(
             pd.DataFrame(rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             column_config={
                 "#":           st.column_config.NumberColumn(width="small"),
@@ -378,7 +372,7 @@ with tab1:
                         "Reviews": r["feedback_count"],
                     })
                 if naive_rows:
-                    st.dataframe(pd.DataFrame(naive_rows), hide_index=True, use_container_width=True)
+                    st.dataframe(pd.DataFrame(naive_rows), hide_index=True, width="stretch")
 
             with col_sybil:
                 st.markdown("**After — Trust Shield applied**")
@@ -399,7 +393,7 @@ with tab1:
                         "Verdict": flags or "✓ Clean",
                     })
                 if sybil_rows:
-                    st.dataframe(pd.DataFrame(sybil_rows), hide_index=True, use_container_width=True)
+                    st.dataframe(pd.DataFrame(sybil_rows), hide_index=True, width="stretch")
 
             deltas = [d for d in cmp.get("deltas", []) if d["rank_delta"] != 0]
             if deltas:
@@ -469,7 +463,7 @@ with tab2:
             "Every decision is logged to Hedera HCS permanently."
         )
 
-        col1, col2, col3 = st.columns([3, 2, 2])
+        col1, col2 = st.columns([3, 2])
         with col1:
             goal = st.text_input(
                 "What does the requester agent need?",
@@ -478,18 +472,7 @@ with tab2:
             capability = st.selectbox("Capability required", ["rag-evaluation", "summarization"])
         with col2:
             threshold = st.slider("Min trust score", 0.0, 1.0, 0.5, 0.05)
-            st.markdown("**Settlement rail**")
-            rail_choice = st.radio(
-                "rail", ["🔷 Hedera HBAR", "🟡 Arc USDC"],
-                label_visibility="collapsed", horizontal=True,
-            )
-            selected_rail = "arc" if "Arc" in rail_choice else "hedera"
-        with col3:
-            st.markdown("&nbsp;")
-            if selected_rail == "arc":
-                st.info("**Arc testnet**\nUSDC as native gas · near-zero fees · Circle stablecoin settlement")
-            else:
-                st.info("**Hedera testnet**\nHBAR transfer · HCS audit log · millisecond finality")
+            st.info("**Hedera testnet**\nHBAR transfer · HCS audit log · millisecond finality")
 
         if st.button("▶  Run autonomous hire", type="primary"):
             with st.spinner("RequesterAgent running autonomously..."):
@@ -500,7 +483,6 @@ with tab2:
                         "capability":       capability,
                         "trust_threshold":  threshold,
                         "narrate_with_llm": False,
-                        "rail":             selected_rail,
                     },
                     timeout=30,
                 )
@@ -512,7 +494,6 @@ with tab2:
                 parts = []
                 if src.get("bigquery"): parts.append(f"BigQuery: **{src['bigquery']}**")
                 if src.get("hedera"):   parts.append(f"Hedera: **{src['hedera']}**")
-                if src.get("arc"):      parts.append(f"Arc: **{src['arc']}**")
                 st.caption("  ·  ".join(parts))
 
                 ICONS = {"discover":"🔍","filter":"🔎","select":"🏆","decide":"🧠","pay":"💸","serve":"✅"}
@@ -534,17 +515,13 @@ with tab2:
                 svc = result.get("service_output")   or {}
 
                 if result.get("success"):
-                    tx    = dec.get("tx_id", "")
-                    rail  = dec.get("rail", "hedera")
-                    usdc  = dec.get("usdc_amount")
-                    amt   = f"${usdc:.4f} USDC" if usdc else f"${dec.get('amount_usd',0):.4f} HBAR"
+                    tx  = dec.get("tx_id", "")
+                    amt = f"${dec.get('amount_usd', 0):.4f} HBAR"
                     st.success(
                         f"✅ **{result.get('selected_agent_name')}** hired  ·  "
-                        f"Paid **{amt}** via {rail.upper()}  ·  Tx `{tx}`"
+                        f"Paid **{amt}** via HEDERA  ·  Tx `{tx}`"
                     )
-                    if tx and "0x" in tx:
-                        st.markdown(f"[View on Arc explorer →](https://explorer.testnet.arc.network/tx/{tx})")
-                    elif tx and "@" in tx:
+                    if tx and "@" in tx:
                         st.markdown(f"[View on HashScan →](https://hashscan.io/testnet/transaction/{tx})")
                     if dec.get("hcs_message_id"):
                         st.caption(f"HCS audit entry: `{dec['hcs_message_id']}`")

@@ -12,7 +12,6 @@ USE_LIVE_HEDERA   = os.environ.get("USE_LIVE_HEDERA",   "false").lower() == "tru
 USE_LIVE_BIGQUERY = os.environ.get("USE_LIVE_BIGQUERY", "false").lower() == "true"
 USE_LIVE_RAGAS    = os.environ.get("USE_LIVE_RAGAS",    "false").lower() == "true"
 USE_LIVE_X402     = os.environ.get("USE_LIVE_X402",     "false").lower() == "true"
-USE_LIVE_ARC      = os.environ.get("USE_LIVE_ARC",      "false").lower() == "true"
 
 # Trust gate threshold (0-1 scale) used by the payment flow tab.
 TRUST_THRESHOLD = float(os.environ.get("TRUST_THRESHOLD", "0.5"))
@@ -53,9 +52,3 @@ def get_x402_client():
     return MockX402Client()
 
 
-def get_arc_client():
-    if USE_LIVE_ARC:
-        from integrations.arc.live import LiveArcClient
-        return LiveArcClient()
-    from integrations.arc.mock import MockArcClient
-    return MockArcClient()

@@ -6,4 +6,3 @@ requests
 hiero-sdk-python
 python-dotenv
 protobuf>=4.21.0
-web3>=7.0.0

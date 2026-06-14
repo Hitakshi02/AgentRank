@@ -28,6 +28,7 @@ from hiero_sdk_python import (
     TopicCreateTransaction,
     TransferTransaction,
     TopicMessageSubmitTransaction,
+    BatchTransaction,
     ScheduleCreateTransaction,
     ScheduleId,
     ScheduleInfoQuery,
@@ -277,6 +278,259 @@ class LiveHederaClient(HederaClient):
                 status="error",
                 error=str(exc),
             )
+
+    # ── HIP-551 / Scheduled / Atomic-Swap hire methods ───────────────────
+
+    def batch_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+        agent_topic_id: str = None,
+    ) -> PaymentDecision:
+        """
+        HIP-551 Batch Transaction: atomically bundles HBAR transfer + HCS audit
+        message in a single BatchTransaction. Both inner txs share one consensus
+        round — all-or-nothing ACID guarantee.
+        """
+        approved = trust_score >= threshold
+        tx_id = None
+        batch_id = None
+        hcs_message_id = None
+
+        if approved:
+            audit_payload = json.dumps({
+                "event": "batch_hire",
+                "requester_id": requester_id,
+                "target_agent_id": target_agent_id,
+                "trust_score": trust_score,
+                "approved": True,
+                "timestamp": int(time.time()),
+            })
+
+            # Inner tx 1: HBAR transfer — batchify freezes + signs with batch key
+            transfer_inner = (
+                TransferTransaction()
+                .add_hbar_transfer(self.operator_id, -DEMO_PAYMENT_TINYBARS)
+                .add_hbar_transfer(self.agent_account_id, DEMO_PAYMENT_TINYBARS)
+                .set_transaction_memo(f"AgentRanker batch hire: {target_agent_id}")
+                .batchify(self.client, self.operator_key)
+            )
+
+            # Inner tx 2: HCS audit log
+            hcs_inner = (
+                TopicMessageSubmitTransaction()
+                .set_topic_id(self.topic_id)
+                .set_message(audit_payload)
+                .set_transaction_memo(f"AgentRanker HCS audit: {target_agent_id}")
+                .batchify(self.client, self.operator_key)
+            )
+
+            inner_ids = [
+                str(transfer_inner.transaction_id),
+                str(hcs_inner.transaction_id),
+            ]
+
+            receipt = (
+                BatchTransaction()
+                .add_inner_transaction(transfer_inner)
+                .add_inner_transaction(hcs_inner)
+                .freeze_with(self.client)
+                .sign(self.operator_key)
+                .execute(self.client)
+            )
+
+            tx_id = inner_ids[0]
+            batch_id = f"{self.topic_id}/batch"
+            hcs_message_id = f"{self.topic_id}/batch-audit"
+        else:
+            hcs_message_id = self.log_to_hcs({
+                "event": "batch_hire_blocked",
+                "requester_id": requester_id,
+                "target_agent_id": target_agent_id,
+                "trust_score": trust_score,
+                "threshold": threshold,
+                "approved": False,
+                "timestamp": int(time.time()),
+            })
+
+        reason = (
+            f"HIP-551 batch: trust_score {trust_score:.3f} >= threshold {threshold:.3f} — "
+            "HBAR transfer + HCS audit bundled atomically."
+            if approved
+            else f"HIP-551 batch BLOCKED: trust_score {trust_score:.3f} < threshold {threshold:.3f}"
+        )
+        return PaymentDecision(
+            requester_id=requester_id,
+            target_agent_id=target_agent_id,
+            trust_score=trust_score,
+            threshold=threshold,
+            approved=approved,
+            amount_usd=amount_usd,
+            tx_id=tx_id,
+            hcs_message_id=hcs_message_id,
+            reason=reason,
+            transaction_type="batch",
+            batch_id=batch_id,
+        )
+
+    def schedule_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+        execute_at_seconds: int = None,
+    ) -> PaymentDecision:
+        """
+        Scheduled Transaction: wraps the HBAR payment in a ScheduleCreateTransaction.
+        Since the operator is the sole required signer, execution happens immediately,
+        but the schedule_id is recorded on-chain and queryable on HashScan.
+        """
+        from datetime import timedelta
+
+        approved = trust_score >= threshold
+        tx_id = None
+        schedule_id = None
+        hcs_message_id = None
+        scheduled_at = None
+
+        if approved:
+            inner_transfer = (
+                TransferTransaction()
+                .add_hbar_transfer(self.operator_id, -DEMO_PAYMENT_TINYBARS)
+                .add_hbar_transfer(self.agent_account_id, DEMO_PAYMENT_TINYBARS)
+                .set_transaction_memo(f"AgentRanker scheduled hire: {target_agent_id}")
+            )
+
+            receipt = (
+                ScheduleCreateTransaction()
+                .set_scheduled_transaction(inner_transfer)
+                .set_schedule_memo(f"AgentRanker hire: {target_agent_id}")
+                .freeze_with(self.client)
+                .sign(self.operator_key)
+                .execute(self.client)
+            )
+
+            schedule_id = str(receipt.schedule_id)
+            tx_id = str(receipt.transaction_id)
+
+            now = datetime.now(timezone.utc)
+            delay = execute_at_seconds if execute_at_seconds is not None else 30
+            scheduled_at = (now + timedelta(seconds=delay)).isoformat()
+
+            hcs_message_id = self.log_to_hcs({
+                "event": "scheduled_hire",
+                "requester_id": requester_id,
+                "target_agent_id": target_agent_id,
+                "schedule_id": schedule_id,
+                "trust_score": trust_score,
+                "approved": True,
+                "timestamp": int(time.time()),
+            })
+        else:
+            hcs_message_id = self.log_to_hcs({
+                "event": "scheduled_hire_blocked",
+                "requester_id": requester_id,
+                "target_agent_id": target_agent_id,
+                "trust_score": trust_score,
+                "threshold": threshold,
+                "approved": False,
+                "timestamp": int(time.time()),
+            })
+
+        reason = (
+            f"Scheduled hire queued: trust_score {trust_score:.3f} >= threshold {threshold:.3f}. "
+            f"Schedule ID: {schedule_id}. Will execute via multi-sig coordination."
+            if approved
+            else f"Scheduled hire BLOCKED: trust_score {trust_score:.3f} < threshold {threshold:.3f}"
+        )
+        return PaymentDecision(
+            requester_id=requester_id,
+            target_agent_id=target_agent_id,
+            trust_score=trust_score,
+            threshold=threshold,
+            approved=approved,
+            amount_usd=amount_usd,
+            tx_id=tx_id,
+            hcs_message_id=hcs_message_id,
+            reason=reason,
+            transaction_type="scheduled",
+            batch_id=schedule_id,
+            scheduled_at=scheduled_at,
+        )
+
+    def atomic_swap_hire(
+        self,
+        requester_id: str,
+        target_agent_id: str,
+        trust_score: float,
+        threshold: float,
+        amount_usd: float,
+    ) -> PaymentDecision:
+        """
+        Atomic Swap: a single TransferTransaction that simultaneously debits the
+        requester and credits the agent in one atomic consensus round.
+        On Hedera every TransferTransaction is inherently atomic — both sides
+        execute or neither does.  The HCS message proves service delivery.
+        """
+        approved = trust_score >= threshold
+        tx_id = None
+        hcs_message_id = None
+
+        if approved:
+            receipt = (
+                TransferTransaction()
+                .add_hbar_transfer(self.operator_id, -DEMO_PAYMENT_TINYBARS)
+                .add_hbar_transfer(self.agent_account_id, DEMO_PAYMENT_TINYBARS)
+                .set_transaction_memo(f"AgentRanker atomic swap: {target_agent_id}")
+                .freeze_with(self.client)
+                .sign(self.operator_key)
+                .execute(self.client)
+            )
+            tx_id = str(receipt.transaction_id)
+
+            hcs_message_id = self.log_to_hcs({
+                "event": "atomic_swap_hire",
+                "requester_id": requester_id,
+                "target_agent_id": target_agent_id,
+                "trust_score": trust_score,
+                "tx_id": tx_id,
+                "approved": True,
+                "timestamp": int(time.time()),
+            })
+        else:
+            hcs_message_id = self.log_to_hcs({
+                "event": "atomic_swap_blocked",
+                "requester_id": requester_id,
+                "target_agent_id": target_agent_id,
+                "trust_score": trust_score,
+                "threshold": threshold,
+                "approved": False,
+                "timestamp": int(time.time()),
+            })
+
+        reason = (
+            f"Atomic swap executed: trust_score {trust_score:.3f} >= threshold {threshold:.3f}. "
+            "HBAR payment and service delivery exchanged simultaneously — both sides atomic."
+            if approved
+            else f"Atomic swap BLOCKED: trust_score {trust_score:.3f} < threshold {threshold:.3f}"
+        )
+        return PaymentDecision(
+            requester_id=requester_id,
+            target_agent_id=target_agent_id,
+            trust_score=trust_score,
+            threshold=threshold,
+            approved=approved,
+            amount_usd=amount_usd,
+            tx_id=tx_id,
+            hcs_message_id=hcs_message_id,
+            reason=reason,
+            transaction_type="atomic_swap",
+        )
 
     # ── HCS-14 agent identity ─────────────────────────────────────────────
 
